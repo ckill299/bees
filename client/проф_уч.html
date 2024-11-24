@@ -1,0 +1,297 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Профиль с подвижной панелью</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Основные стили страницы */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            height: 2000px; /* Добавлен большой размер страницы для демонстрации */
+        }
+
+        /* Панель навигации */
+        .navbar {
+            background-color: #333;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            padding: 10px 0;
+            transition: top 0.3s; /* Анимация для скрытия/показа */
+        }
+
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            padding: 14px 20px;
+            text-align: center;
+            display: block;
+            transition: background-color 0.3s;
+        }
+
+        .navbar a:hover {
+            background-color: #575757;
+        }
+
+        /* Основной контент */
+        .container {
+            margin-top: 60px;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        /* Контейнер для заметок */
+        .note-container {
+            margin-top: 20px;
+        }
+
+        .note-container textarea {
+            width: 100%;
+            height: 150px;
+            padding: 10px;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        .note-container button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        .note-container button:hover {
+            background-color: #45a049;
+        }
+
+        /* График */
+        .chart-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        canvas {
+            max-width: 100%;
+        }
+
+        .saved-notes {
+            margin-top: 20px;
+        }
+
+        .saved-notes ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .saved-notes li {
+            background-color: #f9f9f9;
+            padding: 10px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Панель навигации -->
+    <div class="navbar" id="navbar">
+        <a href="#profile">Профиль</a>
+        <a href="#tasks">Задачи</a>
+    </div>
+
+    <!-- Основной контент -->
+    <div class="container">
+        <h1 id="profileHeader">Профиль пользователя</h1>
+
+        <!-- График -->
+        <div class="chart-container">
+            <canvas id="myChart" width="400" height="200"></canvas>
+        </div>
+
+        <!-- Заметки -->
+        <div class="note-container">
+            <h3>Заметки</h3>
+            <textarea id="noteText" placeholder="Напишите заметки здесь..."></textarea>
+            <button onclick="saveNote()">Сохранить заметку</button>
+
+            <div class="saved-notes">
+                <h4>Ваши заметки:</h4>
+                <ul id="savedNotesList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Получаем данные из localStorage
+        const login = localStorage.getItem('login');
+        const accessLevel = localStorage.getItem('access_level');
+
+        if (!login || !accessLevel) {
+            alert("Необходимые данные не найдены. Пожалуйста, войдите в систему.");
+            window.location.href = '/login'; // перенаправляем на страницу входа
+        }
+
+        // Обновляем заголовок с login
+        document.getElementById('profileHeader').innerText = `Профиль пользователя: ${login}`;
+
+        // Массив с названиями месяцев
+        const monthNames = [
+            'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+            'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+        ];
+
+        // Функция для получения заметок с сервера
+        function fetchNotes() {
+            fetch(`http://localhost:5000/get_notes_by_login?login_children=${login}`)
+                .then(response => response.json())
+                .then(data => {
+                    const notesList = document.getElementById('savedNotesList');
+                    notesList.innerHTML = ''; // Очищаем список перед добавлением новых заметок
+                    if (data && data.notes) {
+                        data.notes.forEach(note => {
+                            const li = document.createElement('li');
+                            li.innerText = note[2];
+                            notesList.appendChild(li);
+                        });
+                    } else {
+                        notesList.innerHTML = '<li>Заметки не найдены</li>';
+                    }
+                })
+                .catch(error => console.error('Ошибка при получении заметок:', error));
+        }
+
+        // Получаем данные для графика
+        function fetchTaskData() {
+            fetch(`http://localhost:5000/task_sum?login=${login}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.data && data.data['task-sum']) {
+                        const taskSum = data.data['task-sum'];
+                        
+                        // Месяцы (ключи словаря)
+                        const labels = Object.keys(taskSum).map(month => monthNames[month - 1] || month); // Преобразуем номера в названия месяцев
+                        
+                        // Количество задач (значения словаря)
+                        const values = Object.values(taskSum);
+
+                        // Данные для графика
+                        const chartData = {
+                            labels: labels,  // Месяцы
+                            datasets: [{
+                                label: 'Задачи по месяцам',
+                                data: values,  // Количество задач
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                borderWidth: 1
+                            }]
+                        };
+
+                        // Настройки графика
+                        const config = {
+                            type: 'line',
+                            data: chartData,
+                            options: {
+                                responsive: true,
+                                scales: {
+                                    x: {
+                                        title: {
+                                            display: true,
+                                            text: 'Месяцы'
+                                        }
+                                    },
+                                    y: {
+                                        title: {
+                                            display: true,
+                                            text: 'Значения'
+                                        },
+                                        beginAtZero: true
+                                    }
+                                }
+                            }
+                        };
+
+                        // Инициализация графика
+                        const ctx = document.getElementById('myChart').getContext('2d');
+                        new Chart(ctx, config);
+                    } else {
+                        console.error('Ошибка: данные для графика не найдены или формат данных некорректен');
+                    }
+                })
+                .catch(error => console.error('Ошибка при получении данных для графика:', error));
+        }
+
+        // Функция для сохранения заметки
+        function saveNote() {
+            const noteText = document.getElementById('noteText').value.trim();
+            if (noteText) {
+                const noteData = {
+                    login_children: login,
+                    access_level: accessLevel,
+                    notes_text: noteText
+                };
+
+                fetch('http://localhost:5000/create_note', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(noteData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Заметка успешно сохранена!');
+                        fetchNotes(); // Обновляем список заметок
+                        document.getElementById('noteText').value = ''; // Очищаем поле после сохранения
+                    } else {
+                        alert('Ошибка при сохранении заметки.');
+                    }
+                })
+                .catch(error => console.error('Ошибка при сохранении заметки:', error));
+            } else {
+                alert('Пожалуйста, напишите заметку перед сохранением!');
+            }
+        }
+
+        // Загружаем заметки и график при загрузке страницы
+        fetchNotes();
+        fetchTaskData();
+
+        // Перемещение панели навигации при прокрутке
+        let lastScrollTop = 0;
+        const navbar = document.getElementById('navbar');
+
+        window.addEventListener('scroll', function () {
+            let currentScroll = window.pageYOffset || document.documentElement.scrollTop;
+
+            if (currentScroll > lastScrollTop) {
+                // Прокрутка вниз - скрываем панель
+                navbar.style.top = "-60px"; // Высота панели
+            } else {
+                // Прокрутка вверх - показываем панель
+                navbar.style.top = "0";
+            }
+
+            lastScrollTop = currentScroll <= 0 ? 0 : currentScroll; // Для Safari
+        });
+    </script>
+
+</body>
+</html>

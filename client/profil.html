@@ -1,0 +1,209 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Профиль пользователя</title>
+    <style>
+        /* Основные стили страницы */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+        }
+
+        /* Панель навигации */
+        .navbar {
+            background-color: #333;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            padding: 10px 0;
+        }
+
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            padding: 14px 20px;
+            text-align: center;
+            display: block;
+            transition: background-color 0.3s;
+        }
+
+        .navbar a:hover {
+            background-color: #575757;
+        }
+
+        /* Основной контент */
+        .container {
+            margin-top: 60px;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        /* Стиль для добавленных элементов */
+        .added-item {
+            background-color: #e2e2e2;
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        .added-item button {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            cursor: pointer;
+            padding: 5px 10px;
+            font-size: 14px;
+            border-radius: 3px;
+        }
+
+        .added-item button:hover {
+            background-color: #d32f2f;
+        }
+
+        /* Контейнер для добавления новых элементов */
+        .add-item-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .add-item-container input[type="text"] {
+            padding: 10px;
+            width: 60%;
+            font-size: 16px;
+            margin-right: 10px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .add-item-container button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+
+        .add-item-container button:hover {
+            background-color: #45a049;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Панель навигации -->
+    <div class="navbar" id="navbar">
+        <a href="#profile">Профиль</a>
+        <a href="#tasks">Задачи</a>
+    </div>
+
+    <!-- Основной контент -->
+    <div class="container">
+        <h1 id="profileTitle">Загрузка...</h1> <!-- Заголовок для профиля, который будет обновлен с помощью JS -->
+
+        <!-- Контейнер для добавления элементов -->
+        <div class="add-item-container">
+            <input type="text" id="newItem" placeholder="Введите новый элемент...">
+            <button onclick="addItem()">Добавить элемент</button>
+        </div>
+
+        <!-- Список добавленных элементов -->
+        <div id="addedItemsContainer"></div>
+    </div>
+
+    <script>
+        // Функция для установки заголовка профиля из localStorage
+        function setProfileTitle() {
+            const profileTitle = document.getElementById('profileTitle');
+            const login = localStorage.getItem('login');
+
+            if (login) {
+                profileTitle.textContent = `Профиль пользователя: ${login}`;
+            } else {
+                profileTitle.textContent = 'Профиль пользователя не найден';
+            }
+        }
+
+        // Вызов функции для установки заголовка
+        setProfileTitle();
+
+        // Функция для добавления нового элемента и отправки GET-запроса
+        async function addItem() {
+            const input = document.getElementById('newItem');
+            const inputValue = input.value.trim();
+
+            // Если поле пустое, не добавляем элемент
+            if (!inputValue) {
+                alert("Пожалуйста, введите текст для нового элемента!");
+                return;
+            }
+
+            // Получаем login учителя из localStorage
+            const teacherLogin = localStorage.getItem('login');
+            if (!teacherLogin) {
+                alert('Не удалось найти данные login в localStorage!');
+                return;
+            }
+
+            try {
+                // Отправляем GET-запрос на сервер с параметром teacher_login
+                const response = await fetch(`http://localhost:5000/children_by_teacher?teacher_login=${teacherLogin}`);
+                
+                if (!response.ok) {
+                    throw new Error('Ошибка при получении данных');
+                }
+
+                const data = await response.json();
+                const children = data.message;  // Получаем список учеников
+
+                // Проверяем, есть ли ученики в ответе
+                if (Array.isArray(children) && children.length > 0) {
+                    const container = document.getElementById('addedItemsContainer');
+                    
+                    // Добавляем новый элемент с учениками
+                    const newItem = document.createElement('div');
+                    newItem.classList.add('added-item');
+                    newItem.innerHTML = ` 
+                        <span>${inputValue}</span>
+                        <ul>
+                            ${children.map(child => `<li>${child}</li>`).join('')}
+                        </ul>
+                        <button onclick="removeItem(this)">Удалить</button>
+                    `;
+                    
+                    container.appendChild(newItem);
+                } else {
+                    alert('Нет учеников для отображения.');
+                }
+
+                // Очищаем поле ввода
+                input.value = '';
+            } catch (error) {
+                console.error('Ошибка при отправке запроса:', error);
+                alert('Не удалось получить данные о детях!');
+            }
+        }
+
+        // Функция для удаления элемента
+        function removeItem(button) {
+            const item = button.parentElement;
+            item.remove();
+        }
+    </script>
+
+</body>
+</html>

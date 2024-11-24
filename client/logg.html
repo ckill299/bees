@@ -1,0 +1,137 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="login.css">
+    <title>Форма авторизации</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background-color: #f4f4f9;
+}
+
+.form-container {
+    background-color: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    width: 300px;
+}
+
+h2 {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+}
+
+input[type="text"],
+input[type="password"],
+select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+button {
+    width: 100%;
+    padding: 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+button:hover {
+    background-color: #45a049;
+}
+input.username{
+    width: 90%;
+}
+input.password{
+    width: 90%;
+}
+a{
+font-size:1em;
+}
+</style>
+    <script>
+        // Функция для изменения action формы в зависимости от выбранной роли
+        function changeAction() {
+            var role = document.getElementById("acces_level").value;
+            var form = document.getElementById("registrationForm");
+
+            // Изменяем action в зависимости от выбранной роли
+            if (role == "0") {
+                form.action = "http://localhost:5000/login_сhildren";
+            } else if (role == "1") {
+                form.action = "http://localhost:5000/login_parents";
+            } else if (role == "2") {
+                form.action = "http://localhost:5000/login_teacher";
+            }
+        }
+
+        // Функция для сохранения данных в localStorage
+        function saveToLocalStorage() {
+            var login = document.getElementById("username").value.trim();
+            var accessLevel = document.getElementById("acces_level").value;
+
+            if (login && accessLevel) { // Проверка, что поля не пустые
+                // Сохраняем данные в localStorage
+                localStorage.setItem('login', login);
+                localStorage.setItem('access_level', accessLevel);
+                console.log('Данные сохранены в localStorage');
+            } else {
+                console.log('Заполните все поля');
+            }
+        }
+
+        // Обработчик отправки формы
+        document.addEventListener("DOMContentLoaded", function() {
+            var form = document.getElementById("registrationForm");
+            form.addEventListener("submit", function(event) {
+                // Сохраняем данные в localStorage перед отправкой формы
+                saveToLocalStorage();
+            });
+        });
+    </script>
+</head>
+<body>
+
+<div class="form-container">
+    <h2>Вход</h2>
+    <form id="registrationForm" action="http://127.0.0.1:5000/login_children" method="post">
+        <label for="username">Логин</label>
+        <input class="username" type="text" id="username" name="login" required>
+
+        <label for="password">Пароль</label>
+        <input class="password" type="password" id="password" name="password" required>
+
+        <label for="role">Выберите роль</label>
+        <select id="acces_level" name="acces_level" required onchange="changeAction()">
+            <option value="0">Ребёнок</option>
+            <option value="1">Родитель</option>
+            <option value="2">Учитель</option>
+        </select>
+
+        <a href="google.com">Зарегистрироваться</a>
+        <button type="submit">Войти</button>
+    </form>
+</div>
+
+</body>
+</html>

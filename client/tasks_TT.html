@@ -1,0 +1,449 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Задачи</title>
+
+    <style>
+        /* Стили для страницы */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+        }
+
+        /* Панель навигации */
+        .navbar {
+            background-color: #333;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            justify-content: center;
+            padding: 10px 0;
+        }
+
+        .navbar a {
+            color: white;
+            text-decoration: none;
+            padding: 14px 20px;
+            text-align: center;
+            display: block;
+            transition: background-color 0.3s;
+        }
+
+        .navbar a:hover {
+            background-color: #575757;
+        }
+
+        /* Контент страницы */
+        .container {
+            margin-top: 60px;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        /* Таблица задач */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+
+        .status {
+            padding: 5px;
+            color: white;
+            border-radius: 3px;
+        }
+
+        .status.active {
+            background-color: green;
+        }
+
+        .status.inactive {
+            background-color: red;
+        }
+
+        /* Стили для выпадающего списка */
+        select {
+            padding: 10px;
+            font-size: 16px;
+            margin: 0 15px;
+        }
+
+        /* Стили для модального окна */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 600px;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* Стили для формы */
+        .task-form input, .task-form textarea, .task-form select {
+            width: 100%;
+            padding: 8px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .task-form button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .task-form button:hover {
+            background-color: #45a049;
+        }
+
+        /* Стили для статуса */
+        .status {
+            padding: 5px;
+            color: white;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .in-progress {
+            background-color: blue; /* Синий фон для статуса 'В процессе' */
+        }
+
+        .completed {
+            background-color: green;
+        }
+
+        .failed {
+            background-color: red;
+        }
+
+        .overdue {
+            background-color: orange;
+        }
+    </style>
+
+    <script>
+        let currentTaskId = null;  // Переменная для хранения текущего ID задачи
+
+        // Функция для получения задач с сервера с использованием GET
+        async function getTasks() {
+            const login = localStorage.getItem('login');
+            
+            if (!login) {
+                alert('Логин не найден! Пожалуйста, сохраните его в форме.');
+                return;
+            }
+
+            try {
+                // Добавляем login как параметр в URL
+                const response = await fetch(`http://localhost:5000/tasks?login=${login}`, {
+                    method: 'GET'
+                });
+
+                if (!response.ok) {
+                    throw new Error('Ошибка запроса: ' + response.status);
+                }
+
+                const data = await response.json();
+
+                const taskTableBody = document.getElementById('task-table-body');
+                taskTableBody.innerHTML = ''; // Очищаем текущую таблицу
+
+                data.message.forEach(task => {
+                    const row = document.createElement('tr');
+                    
+                    const taskName = task.task_name || '';
+                    const to = task.login_children || ''; // Кому (новое поле)
+                    const status = getStatusText(task.status);
+                    const formattedDate = formatDate(task.deadline);
+                    const statusClass = getStatusClass(task.status);
+
+                    row.innerHTML = `
+                        <td><button class="task-btn" onclick="openModal(${JSON.stringify(task)})">${taskName}</button></td>
+                        <td>${to}</td>  <!-- Добавлено поле Кому -->
+                        <td>${getAccessLevelText(task.access_level)}</td>
+                        <td><span class="status ${statusClass}">${status}</span></td>
+                        <td>${formattedDate}</td>
+                    `;
+                    
+                    taskTableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Ошибка при получении задач:', error);
+                alert('Не удалось получить задачи с сервера.');
+            }
+        }
+
+        // Функция для открытия модального окна с текстом задания
+        function openModal(task) {
+            const modal = document.getElementById("taskModal");
+            const modalContent = document.getElementById("taskModalContent");
+            
+            modalContent.innerHTML = `<p>${task.task_text}</p>`;
+            
+            currentTaskId = task.id_task;
+
+            if (task.status === 0) {
+                document.getElementById("updateStatusButton").style.display = "inline-block";
+            } else {
+                document.getElementById("updateStatusButton").style.display = "none";
+            }
+
+            modal.style.display = "block";
+        }
+
+        // Функция для закрытия модального окна
+        function closeModal() {
+            const modal = document.getElementById("taskModal");
+            modal.style.display = "none";
+        }
+
+        // Функция для обновления статуса задачи
+        async function updateTaskStatus() {
+            if (!currentTaskId) {
+                alert("Задача не найдена.");
+                return;
+            }
+
+            const newStatus = 1;  // Новый статус (например, 1 - "Готово")
+
+            try {
+                const response = await fetch('http://localhost:5000/update_task_status', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        task_id: currentTaskId,
+                        new_status: newStatus
+                    })
+                });
+
+                if (response.ok) {
+                    alert('Статус задачи обновлён!');
+                    closeModal();
+                    getTasks();  // Обновляем список задач
+                } else {
+                    alert('Ошибка при обновлении статуса задачи.');
+                }
+            } catch (error) {
+                console.error('Ошибка при отправке запроса:', error);
+                alert('Не удалось обновить статус задачи.');
+            }
+        }
+
+        // Функция для получения текста статуса
+        function getStatusText(statusCode) {
+            const statusMapping = {
+                0: 'В процессе',
+                1: 'Готово',
+                2: 'Провален',
+                3: 'Просрочен'
+            };
+            return statusMapping[statusCode] || 'Неизвестно';
+        }
+
+        // Функция для получения класса для цвета статуса
+        function getStatusClass(statusCode) {
+            const statusClassMapping = {
+                0: 'in-progress',
+                1: 'completed',
+                2: 'failed',
+                3: 'overdue'
+            };
+            return statusClassMapping[statusCode] || 'unknown';
+        }
+
+        // Функция для получения текста уровня доступа
+        function getAccessLevelText(accessLevel) {
+            const accessLevelMapping = {
+                0: 'Учёнок',
+                1: 'Родитель',
+                 2: 'Учитель'
+            };
+            return accessLevelMapping[accessLevel] || 'Неизвестно';
+        }
+
+        // Функция для форматирования даты в нужный формат
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${day}.${month}.${year} ${hours}:${minutes}`;
+        }
+
+        // Функция для создания задачи
+        async function createTask() {
+            const taskName = document.getElementById("task_name").value;
+            const taskText = document.getElementById("task_text").value;
+            const deadline = document.getElementById("deadline").value;
+            const loginChildren = document.getElementById("task_to").value;
+            const accessLevel = localStorage.getItem("access_level") || 0;  // Используем localStorage для доступа
+            const fromLogin = localStorage.getItem("login");
+
+            // Проверяем, что все обязательные поля заполнены
+            if (!taskName || !taskText || !deadline || !loginChildren || !fromLogin) {
+                alert("Пожалуйста, заполните все поля!");
+                return;
+            }
+
+            try {
+                // Отправляем POST-запрос для создания задачи
+                const response = await fetch('http://localhost:5000/create_task', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        task_name: taskName,               // Название задачи
+                        login_children: loginChildren,     // Кому
+                        access_level: accessLevel,         // Уровень доступа
+                        task_text: taskText,               // Текст задания
+                        status: 0,                         // Статус по умолчанию (в процессе)
+                        deadline: deadline,                // Дата и время выполнения
+                        from_login: fromLogin              // Кто создал задачу
+                    })
+                });
+
+                if (response.ok) {
+                    alert('Задача успешно создана!');
+                    document.getElementById('createTaskModal').style.display = 'none';
+                    getTasks();  // Обновляем список задач
+                } else {
+                    alert('Ошибка при создании задачи.');
+                }
+            } catch (error) {
+                console.error('Ошибка при отправке запроса:', error);
+                alert('Не удалось создать задачу.');
+            }
+        }
+
+        // Загружаем задачи при загрузке страницы
+        window.addEventListener('load', getTasks);
+    </script>
+</head>
+<body>
+
+    <!-- Панель навигации -->
+    <div class="navbar">
+        <a href="#profile">Профиль</a>
+        <a href="#tasks">Задачи</a>
+    </div>
+
+    <!-- Основной контент -->
+    <div class="container">
+        <h1>Список задач</h1>
+
+        <!-- Кнопка для создания задачи -->
+        <button onclick="document.getElementById('createTaskModal').style.display='block'">Создать задачу</button>
+
+        <!-- Таблица с задачами -->
+        <table>
+            <thead>
+                <tr>
+                    <th>Задача</th>
+                    <th>Кому</th>
+                    <th>Уровень доступа</th>
+                    <th>Статус</th>
+                    <th>Дата</th>
+                </tr>
+            </thead>
+            <tbody id="task-table-body">
+                <!-- Здесь будет динамически добавляться содержимое задач -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Модальное окно для создания задачи -->
+    <div id="createTaskModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="document.getElementById('createTaskModal').style.display='none'">&times;</span>
+            <h2>Создать задачу</h2>
+            <div class="task-form">
+                <label for="task_name">Название задачи</label>
+                <input type="text" id="task_name" placeholder="Введите название задачи" required>
+
+                <label for="task_text">Описание задачи</label>
+                <textarea id="task_text" placeholder="Введите описание задачи" required></textarea>
+
+                <label for="task_to">Кому</label>
+                <input type="text" id="task_to" placeholder="Введите получателя задачи" required>
+
+                <label for="deadline">Дата и время выполнения</label>
+                <input type="datetime-local" id="deadline" required>
+
+                <button type="button" onclick="createTask()">Создать задачу</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для отображения текста задачи -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Текст задачи</h2>
+            <div id="taskModalContent"></div>
+            <button id="updateStatusButton" onclick="updateTaskStatus()" style="display:none;">Обновить статус</button>
+        </div>
+    </div>
+
+</body>
+</html>
